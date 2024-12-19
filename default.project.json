@@ -60,7 +60,8 @@
         "Brightness": 2,
         "GlobalShadows": true,
         "Outlines": false,
-        "Technology": "Voxel"
+        "Technology": "Voxel",
+        "TimeOfDay": "23:55:00"
       }
     },
     "SoundService": {
