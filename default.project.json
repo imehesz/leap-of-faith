@@ -2,13 +2,23 @@
   "name": "leap-of-faith",
   "tree": {
     "$className": "DataModel",
-
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "LevelCompleteEvent": {
+          "$className": "RemoteEvent"
+        },
+        "ReplayLevelEvent": {
+          "$className": "RemoteEvent"
+        },
+        "NextLevelEvent": {
+          "$className": "RemoteEvent"
+        }
       }
     },
-
     "ServerScriptService": {
       "Server": {
         "$path": "src/server"
