@@ -16,6 +16,9 @@
         },
         "NextLevelEvent": {
           "$className": "RemoteEvent"
+        },
+        "StartGameEvent": {
+          "$className": "RemoteEvent"
         }
       }
     },

@@ -7,6 +7,7 @@ local maxLevels = #workspace.Levels:GetChildren()
 local debounce = false
 local isReplaying = false
 local nextLevelDebounce = false
+local gameStarted = {}
 
 -- Scoring and timing variables
 local score = 0
@@ -32,17 +33,28 @@ local function hideStepsInLevel(levelNumber)
     end
 end
 
-  local function spawnAtCurrentLevel(player)
-      local character = player.Character or player.CharacterAdded:Wait()
-      local levelFolder = workspace.Levels:FindFirstChild("Level" .. currentLevel)
-      if levelFolder and levelFolder:FindFirstChild("StartPart") then
-          task.wait(0.1) -- Give character physics time to settle
-          character:PivotTo(levelFolder.StartPart.CFrame + Vector3.new(0, 3, 0))
-          levelStartTime = os.time()
-          currentTime = 0
-          hideStepsInLevel(currentLevel)
-      end
-  end
+local function hideBlockersInLevel(levelNumber)
+    local levelFolder = workspace.Levels:FindFirstChild("Level" .. currentLevel)
+    for _, part in CollectionService:GetTagged("blocker") do
+        if part:IsDescendantOf(currentLevelFolder) then
+            part.Transparency = 1
+            part.CanCollide = false
+        end
+    end
+end
+
+local function spawnAtCurrentLevel(player)
+    local character = player.Character or player.CharacterAdded:Wait()
+    local levelFolder = workspace.Levels:FindFirstChild("Level" .. currentLevel)
+    if levelFolder and levelFolder:FindFirstChild("StartPart") then
+        task.wait(0.1) -- Give character physics time to settle
+        character:PivotTo(levelFolder.StartPart.CFrame + Vector3.new(0, 3, 0))
+        levelStartTime = os.time()
+        currentTime = 0
+        hideStepsInLevel(currentLevel)
+        hideBlockersInLevel(currentLevel)
+    end
+end
 
   local function onDeathTouch(hit)
       local character = hit.Parent
@@ -67,6 +79,14 @@ end
             score += currentLevel * 10
             if not recordTimes[currentLevel] or currentTime < recordTimes[currentLevel] then
                 recordTimes[currentLevel] = currentTime
+            end
+
+            
+            local levelFolder = workspace.Levels:FindFirstChild("Level" .. currentLevel)
+            for _, part in CollectionService:GetTagged("blocker") do
+                if part:IsDescendantOf(currentLevelFolder) then
+                    part.CanCollide = true
+                end
             end
         
             ReplicatedStorage.Remotes.LevelCompleteEvent:FireClient(player, true)
@@ -102,20 +122,40 @@ end)
 
 -- Connect events
 Players.PlayerAdded:Connect(function(player)
-    -- Set initial GUI state to disabled
+    -- Set initial GUI states
     local replayGui = player:WaitForChild("PlayerGui"):WaitForChild("ReplayOrNext")
     replayGui.Enabled = false
     
+    local welcomeGui = player:WaitForChild("PlayerGui"):WaitForChild("Welcome")
+    welcomeGui.Enabled = true
+    
+    -- Track game state for each player
+    gameStarted[player.UserId] = false
+    
     player.CharacterAdded:Connect(function()
         task.wait()
-        spawnAtCurrentLevel(player)
+        if gameStarted[player.UserId] then
+            spawnAtCurrentLevel(player)
+        end
     end)
+end)
+
+-- Add new remote event handler
+ReplicatedStorage.Remotes.StartGameEvent.OnServerEvent:Connect(function(player)
+    gameStarted[player.UserId] = true
+    local welcomeGui = player:WaitForChild("PlayerGui"):WaitForChild("Welcome")
+    welcomeGui.Enabled = false
+    spawnAtCurrentLevel(player)
+end)
+
+-- Clean up when player leaves
+Players.PlayerRemoving:Connect(function(player)
+    gameStarted[player.UserId] = nil
 end)
 
 for _, player in Players:GetPlayers() do
     spawnAtCurrentLevel(player)
 end
-
 for _, part in CollectionService:GetTagged("death") do
     part.Touched:Connect(onDeathTouch)
 end

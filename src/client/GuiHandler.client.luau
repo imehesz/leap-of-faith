@@ -7,6 +7,11 @@ local function getReplayGui()
     return player:WaitForChild("PlayerGui"):WaitForChild("ReplayOrNext")
 end
 
+local function getWelcomeGui()
+    local player = Players.LocalPlayer
+    return player:WaitForChild("PlayerGui"):WaitForChild("Welcome")
+end
+
 -- Button handlers
 local function setupButtons()
     local replayGui = getReplayGui()
@@ -33,3 +38,10 @@ ReplicatedStorage.Remotes.LevelCompleteEvent.OnClientEvent:Connect(function(shou
 end)
 
 setupButtons()
+
+local welcomeGui = getWelcomeGui()
+local startButton = welcomeGui:WaitForChild("StartGameButton")
+
+startButton.MouseButton1Click:Connect(function()
+    ReplicatedStorage.Remotes.StartGameEvent:FireServer()
+end)
