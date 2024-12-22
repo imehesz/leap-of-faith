@@ -6,6 +6,7 @@ local currentLevel = 1
 local maxLevels = #workspace.Levels:GetChildren()
 local debounce = false
 local isReplaying = false
+local nextLevelDebounce = false
 
 -- Scoring and timing variables
 local score = 0
@@ -84,11 +85,19 @@ ReplicatedStorage.Remotes.ReplayLevelEvent.OnServerEvent:Connect(function(player
 end)
 
 ReplicatedStorage.Remotes.NextLevelEvent.OnServerEvent:Connect(function(player)
+    if nextLevelDebounce then return end
+    
+    nextLevelDebounce = true
+
     currentLevel += 1
     if currentLevel > maxLevels then
         currentLevel = 1
     end
     spawnAtCurrentLevel(player)
+    
+    -- Reset debounce after a short delay
+    task.wait(0.5)
+    nextLevelDebounce = false
 end)
 
 -- Connect events
