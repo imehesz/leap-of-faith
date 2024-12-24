@@ -165,14 +165,24 @@ for _, part in CollectionService:GetTagged("levelDone") do
 end
 
 for _, part in CollectionService:GetTagged("goodStep") do
+    local lastTouchTime = 0
+    
     part.Touched:Connect(function(hit)
         local player = Players:GetPlayerFromCharacter(hit.Parent)
         if player then
             part.Transparency = 0
+            lastTouchTime = os.time()
+            
+            -- Create a new thread to handle the fade-out
+            task.spawn(function()
+                task.wait(5)
+                -- Only hide if 5 seconds passed since last touch
+                if os.time() - lastTouchTime >= 5 then
+                    part.Transparency = 1
+                end
+            end)
         end
     end)
 end
-
--- Start the time update loop
 
 task.spawn(updateCurrentTime)
