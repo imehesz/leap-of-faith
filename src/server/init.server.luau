@@ -8,12 +8,27 @@ local debounce = false
 local isReplaying = false
 local nextLevelDebounce = false
 local gameStarted = {}
+local playerStates = {}
 
 -- Scoring and timing variables
 local score = 0
 local currentTime = 0
 local levelStartTime = 0
 local recordTimes = {}
+
+
+local function initializePlayerState(player)
+    playerStates[player.UserId] = {
+        currentLevel = 1,
+        score = 0,
+        recordTimes = {},
+        levelStartTime = 0,
+        currentTime = 0,
+        debounce = false,
+        isReplaying = false,
+        nextLevelDebounce = false
+    }
+end
 
 local function updateCurrentTime()
     while true do
@@ -44,15 +59,19 @@ local function hideBlockersInLevel(levelNumber)
 end
 
 local function spawnAtCurrentLevel(player)
+
+    local playerState = playerStates[player.UserId]
+    if not playerState then return end
+
     local character = player.Character or player.CharacterAdded:Wait()
-    local levelFolder = workspace.Levels:FindFirstChild("Level" .. currentLevel)
+    local levelFolder = workspace.Levels:FindFirstChild("Level" .. playerState.currentLevel)
     if levelFolder and levelFolder:FindFirstChild("StartPart") then
-        task.wait(0.1) -- Give character physics time to settle
+        task.wait(0.1)
         character:PivotTo(levelFolder.StartPart.CFrame + Vector3.new(0, 3, 0))
-        levelStartTime = os.time()
-        currentTime = 0
-        hideStepsInLevel(currentLevel)
-        hideBlockersInLevel(currentLevel)
+        playerState.levelStartTime = os.time()
+        playerState.currentTime = 0
+        hideStepsInLevel(playerState.currentLevel)
+        hideBlockersInLevel(playerState.currentLevel)
     end
 end
 
@@ -67,76 +86,77 @@ end
       end
   end
 
-    local function handleLevelComplete(hit)
-        if debounce or isReplaying then return end
-    
-        local character = hit.Parent
-        local player = Players:GetPlayerFromCharacter(character)
-    
-        if player and hit.Parent:FindFirstChild("Humanoid") and character.Humanoid.Health > 0 then
-            debounce = true
-        
-            score += currentLevel * 10
-            if not recordTimes[currentLevel] or currentTime < recordTimes[currentLevel] then
-                recordTimes[currentLevel] = currentTime
-            end
+local function handleLevelComplete(hit)
+    local character = hit.Parent
+    local player = Players:GetPlayerFromCharacter(character)
+    local playerState = player and playerStates[player.UserId]
 
-            
-            local levelFolder = workspace.Levels:FindFirstChild("Level" .. currentLevel)
-            for _, part in CollectionService:GetTagged("blocker") do
-                if part:IsDescendantOf(currentLevelFolder) then
-                    part.CanCollide = true
-                end
-            end
-        
-            ReplicatedStorage.Remotes.LevelCompleteEvent:FireClient(player, true)
-            task.wait(1)
-            debounce = false
+    if playerState and not playerState.debounce and not playerState.isReplaying then
+        playerState.debounce = true
+
+        playerState.score += playerState.currentLevel * 10
+        if not playerState.recordTimes[playerState.currentLevel] or playerState.currentTime < playerState.recordTimes[playerState.currentLevel] then
+            playerState.recordTimes[playerState.currentLevel] = playerState.currentTime
         end
+
+        local levelFolder = workspace.Levels:FindFirstChild("Level" .. playerState.currentLevel)
+        for _, part in CollectionService:GetTagged("blocker") do
+            if part:IsDescendantOf(levelFolder) then
+                part.CanCollide = true
+            end
+        end
+
+        ReplicatedStorage.Remotes.LevelCompleteEvent:FireClient(player, true)
+        task.wait(1)
+        playerState.debounce = false
     end
+end
 
 ReplicatedStorage.Remotes.ReplayLevelEvent.OnServerEvent:Connect(function(player)
-    isReplaying = true
-    debounce = true
+    local playerState = playerStates[player.UserId]
+    if not playerState then return end
+
+    playerState.isReplaying = true
+    playerState.debounce = true
     spawnAtCurrentLevel(player)
     task.wait(0.5)
-    isReplaying = false
-    debounce = false
+    playerState.isReplaying = false
+    playerState.debounce = false
 end)
 
 ReplicatedStorage.Remotes.NextLevelEvent.OnServerEvent:Connect(function(player)
-    if nextLevelDebounce then return end
-    
-    nextLevelDebounce = true
+    local playerState = playerStates[player.UserId]
+    if not playerState or playerState.nextLevelDebounce then return end
 
-    currentLevel += 1
-    if currentLevel > maxLevels then
-        currentLevel = 1
+    playerState.nextLevelDebounce = true
+
+    playerState.currentLevel += 1
+    if playerState.currentLevel > maxLevels then
+        playerState.currentLevel = 1
     end
     spawnAtCurrentLevel(player)
-    
-    -- Reset debounce after a short delay
+
     task.wait(0.5)
-    nextLevelDebounce = false
+    playerState.nextLevelDebounce = false
 end)
 
 -- Connect events
 Players.PlayerAdded:Connect(function(player)
-    -- Set initial GUI states
+    initializePlayerState(player)
+
     local replayGui = player:WaitForChild("PlayerGui"):WaitForChild("ReplayOrNext")
     replayGui.Enabled = false
-    
+
     local welcomeGui = player:WaitForChild("PlayerGui"):WaitForChild("Welcome")
     welcomeGui.Enabled = true
-    
-    -- Track game state for each player
-    gameStarted[player.UserId] = false
-    
+
     player.CharacterAdded:Connect(function()
         task.wait()
-        if gameStarted[player.UserId] then
-            spawnAtCurrentLevel(player)
-        end
+        spawnAtCurrentLevel(player)
+    end)
+
+    task.spawn(function()
+        updateCurrentTime(player)
     end)
 end)
 
@@ -150,7 +170,7 @@ end)
 
 -- Clean up when player leaves
 Players.PlayerRemoving:Connect(function(player)
-    gameStarted[player.UserId] = nil
+    playerStates[player.UserId] = nil
 end)
 
 for _, player in Players:GetPlayers() do
