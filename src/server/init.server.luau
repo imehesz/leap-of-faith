@@ -1,6 +1,8 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local bgMusic = game.Workspace.BGMusic
+local starSound = game.Workspace.STARSound
 
 local currentLevel = 1
 local maxLevels = #workspace.Levels:GetChildren()
@@ -74,43 +76,48 @@ local function spawnAtCurrentLevel(player)
         hideBlockersInLevel(playerState.currentLevel)
     end
 end
-
-  local function onDeathTouch(hit)
-      local character = hit.Parent
-      local player = Players:GetPlayerFromCharacter(character)
-    
-      if player and character:FindFirstChild("Humanoid") then
-          character.Humanoid.Health = 0
-          local newCharacter = player.CharacterAdded:Wait()
-          spawnAtCurrentLevel(player)
-      end
-  end
-
-local function handleLevelComplete(hit)
-    local character = hit.Parent
-    local player = Players:GetPlayerFromCharacter(character)
-    local playerState = player and playerStates[player.UserId]
-
-    if playerState and not playerState.debounce and not playerState.isReplaying then
-        playerState.debounce = true
-
-        playerState.score += playerState.currentLevel * 10
-        if not playerState.recordTimes[playerState.currentLevel] or playerState.currentTime < playerState.recordTimes[playerState.currentLevel] then
-            playerState.recordTimes[playerState.currentLevel] = playerState.currentTime
+    local function onDeathTouch(hit)
+        local character = hit.Parent
+        local player = Players:GetPlayerFromCharacter(character)
+  
+        if player and character:FindFirstChild("Humanoid") then
+            character.Humanoid.Health = 0
+            local newCharacter = player.CharacterAdded:Wait()
+            spawnAtCurrentLevel(player)
         end
-
-        local levelFolder = workspace.Levels:FindFirstChild("Level" .. playerState.currentLevel)
-        for _, part in CollectionService:GetTagged("blocker") do
-            if part:IsDescendantOf(levelFolder) then
-                part.CanCollide = true
-            end
-        end
-
-        ReplicatedStorage.Remotes.LevelCompleteEvent:FireClient(player, true)
-        task.wait(1)
-        playerState.debounce = false
     end
-end
+
+    local function handleLevelComplete(hit)
+        local character = hit.Parent
+        local player = Players:GetPlayerFromCharacter(character)
+        local playerState = player and playerStates[player.UserId]
+
+        if playerState and not playerState.debounce and not playerState.isReplaying then
+            playerState.debounce = true
+
+            -- Only play sound if not played before
+            if not playerState.soundPlayed and starSound then
+                starSound:Play()
+                playerState.soundPlayed = true
+            end
+
+            playerState.score += playerState.currentLevel * 10
+            if not playerState.recordTimes[playerState.currentLevel] or playerState.currentTime < playerState.recordTimes[playerState.currentLevel] then
+                playerState.recordTimes[playerState.currentLevel] = playerState.currentTime
+            end
+
+            local levelFolder = workspace.Levels:FindFirstChild("Level" .. playerState.currentLevel)
+            for _, part in CollectionService:GetTagged("blocker") do
+                if part:IsDescendantOf(levelFolder) then
+                    part.CanCollide = true
+                end
+            end
+        
+            ReplicatedStorage.Remotes.LevelCompleteEvent:FireClient(player, true)
+            task.wait(1)
+            playerState.debounce = false
+        end
+    end
 
 ReplicatedStorage.Remotes.ReplayLevelEvent.OnServerEvent:Connect(function(player)
     local playerState = playerStates[player.UserId]
@@ -118,6 +125,7 @@ ReplicatedStorage.Remotes.ReplayLevelEvent.OnServerEvent:Connect(function(player
 
     playerState.isReplaying = true
     playerState.debounce = true
+    playerState.soundPlayed = false
     spawnAtCurrentLevel(player)
     task.wait(0.5)
     playerState.isReplaying = false
@@ -129,7 +137,8 @@ ReplicatedStorage.Remotes.NextLevelEvent.OnServerEvent:Connect(function(player)
     if not playerState or playerState.nextLevelDebounce then return end
 
     playerState.nextLevelDebounce = true
-
+    playerState.soundPlayed = false
+    
     playerState.currentLevel += 1
     if playerState.currentLevel > maxLevels then
         playerState.currentLevel = 1
@@ -140,7 +149,6 @@ ReplicatedStorage.Remotes.NextLevelEvent.OnServerEvent:Connect(function(player)
     playerState.nextLevelDebounce = false
 end)
 
--- Connect events
 Players.PlayerAdded:Connect(function(player)
     initializePlayerState(player)
 
@@ -203,6 +211,11 @@ for _, part in CollectionService:GetTagged("goodStep") do
             end)
         end
     end)
+end
+
+if(bgMusic) then
+    bgMusic.Looped = true
+    bgMusic:Play()
 end
 
 task.spawn(updateCurrentTime)
